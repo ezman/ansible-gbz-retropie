@@ -1,0 +1,98 @@
+---
+
+- name: Retropie GBZ Customisation playbook
+  hosts: 127.0.0.1
+  connection: local
+  become: yes
+  tasks:
+
+  - name: Step 2 TFT Setup - Load module
+    command: modprobe fbtft_device custom name=fb_ili9341 gpios=reset:25,dc:24 speed=80000000 fps=60 bgr=1 rotate=90
+
+  - name: Step 2 TFT Setup - fbset
+    command: fbset -fb /dev/fb1
+
+  - name: Step 2 TFT Setup - test LCD
+    command: cat /dev/urandom > /dev/fb1
+
+  - name: Step 2 TFT Setup - con2fbmap
+    command: con2fbmap 1 1
+
+  - name: Step 3 TFT Setup - modules
+    lineinfile:
+      path: /etc/modules
+      line: |
+        spi-bcm2835
+        fbtft_device
+
+  - name: Step 3 TFT Setup - fbtft config file
+    template:
+      src: templates/fbtft.conf.j2
+      dest: /etc/modprobe.d/fbtft.conf
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: Step 3 TFT Setup - install tools git
+    command: apt-get -y install git build-essentials cmake
+
+  - name: Step 3 TFT Setup - fb copy tool
+    shell: |
+      git clone https://github.com/tasanakorn/rpi-fbcp fbcp
+      cd fbcp/
+      mkdir build
+      cd build/
+      cmake ..
+      make
+      sudo install fbcp /usr/local/bin/fbcp
+      fbcp
+
+  - name: Step 3 TFT Setup - fb to rc.local
+    lineinfile:
+      path:
+      line: fbcp&
+      insertbefore: exit 0
+
+  - name: Step 4 Audio Setup - modules
+    lineinfile:
+      path: /etc/modules
+      line: |
+        snd_bcm2835
+        snd_usb_audio
+
+  - name: Step 4 Audio Setup - alsa
+    template:
+      src: templates/alsa-base.conf.j2
+      dest: /etc/modprobe.d/alsa-base.conf
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: Step 5 Retrogame Setup
+    shell: |
+      curl -O https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/master/retrogame.sh
+      bash retrogame.sh
+
+  - name: Step 5 Retrogame - config
+    template:
+      src: templates/retrogame.conf.j2
+      dest: /boot/retrogame.cfg
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: Step 6 ES - config
+    template:
+      src: templates/es_input.conf.j2
+      dest: /home/retropie/.emulationstation/es_input.cfg
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: Step 7 Boot
+    template:
+      src: templates/cmdline.txt.j2
+      dest: /boot/cmdline.txt
+      owner: root
+      group: root
+      mode: 0644
